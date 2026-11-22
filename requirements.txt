@@ -1,0 +1,27 @@
+# AI Study Assistant — dependencies
+#
+# Phase 1 installs these with lower-bound pins so pip can resolve a working
+# set on Python 3.12. After the first successful install we run
+# `pip freeze > requirements.lock.txt` to capture exact versions.
+#
+# Later phases (9 + 10) move this to fully pinned versions for reproducibility.
+
+# --- Backend: web framework + server ---------------------------------------
+fastapi>=0.115.0            # web framework, request routing, auto Swagger UI
+uvicorn[standard]>=0.32.0   # ASGI server that actually runs FastAPI
+
+# --- Backend: validation + config ------------------------------------------
+pydantic>=2.9.0             # data validation; powers FastAPI's schemas
+pydantic-settings>=2.6.0    # loads settings from .env into a typed class
+python-dotenv>=1.0.1        # reads .env files into environment variables
+
+# --- LLM provider -----------------------------------------------------------
+groq>=0.11.0                # official Groq SDK; the ONLY llm dependency
+
+# --- Frontend ---------------------------------------------------------------
+streamlit>=1.40.0           # Python-only web UI
+requests>=2.32.0            # HTTP calls from frontend -> backend
+
+# --- Testing ----------------------------------------------------------------
+pytest>=8.3.0               # test runner
+httpx>=0.27.0               # required by fastapi.testclient.TestClient

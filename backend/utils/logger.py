@@ -8,8 +8,10 @@ Every module in the backend does:
 so log lines carry the module that produced them.
 
 Phase 2: reads LOG_LEVEL from the process environment, defaulting to INFO.
-Phase 3: config.py will call load_dotenv() before this is configured, so the
-         value from .env will be picked up automatically with no change here.
+Phase 3: forces UTF-8 on stdout so LLM output (which contains characters like
+         em dashes and arrows) cannot crash the logger on Windows cp1252
+         consoles. config.py is imported before this runs, which puts .env
+         values into the environment so LOG_LEVEL from .env is honoured.
 """
 
 import logging
@@ -35,6 +37,18 @@ def configure_logging(level: str | None = None) -> None:
     global _configured
     if _configured:
         return
+
+    # Windows consoles default to cp1252, which cannot encode characters LLMs
+    # routinely emit (—, ≈, →, ✓). Without this, logging one of those raises
+    # UnicodeEncodeError and can take down a request. errors="replace" is the
+    # last line of defence so a stray glyph degrades to "?" instead of a crash.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            # Stream already closed or not reconfigurable — logging still works.
+            pass
 
     resolved = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
     # getattr() keeps an unknown value like "VERBOSE" from crashing startup —

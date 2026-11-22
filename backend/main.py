@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend import __version__
+from backend.config import get_settings  # importing also loads .env
 from backend.routers import health
 from backend.utils.logger import configure_logging, get_logger
 
@@ -30,10 +31,30 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Run startup/shutdown logic around the server's lifetime.
 
     Everything before the `yield` is startup; everything after is shutdown.
-    Phase 3 will validate the GROQ_API_KEY here so a misconfigured server
-    fails immediately at boot instead of on the first user request.
     """
-    logger.info("AI Study Assistant API v%s starting up", __version__)
+    settings = get_settings()
+
+    # Report configuration state without ever printing the key itself.
+    logger.info(
+        "AI Study Assistant API v%s starting up (env=%s, model=%s, key=%s)",
+        __version__,
+        settings.app_env,
+        settings.groq_model,
+        settings.masked_api_key,
+    )
+
+    if not settings.is_groq_configured:
+        # A missing key is not fatal in development: /health still works,
+        # so you can confirm the server is fine before fixing the config.
+        # In production it must be fatal — a deployment that cannot serve
+        # its only purpose should not accept traffic.
+        if settings.is_production:
+            settings.require_groq_configured()
+        logger.warning(
+            "GROQ_API_KEY is not configured. LLM endpoints will return 503 "
+            "until you add a real key to .env"
+        )
+
     yield
     logger.info("AI Study Assistant API shutting down")
 

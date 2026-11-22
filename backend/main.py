@@ -16,10 +16,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend import __version__
 from backend.config import get_settings  # importing also loads .env
-from backend.routers import health
+from backend.routers import health, study
+from backend.routers.study import StudyAPIError, study_api_error_handler
 from backend.utils.logger import configure_logging, get_logger
 
 configure_logging()
@@ -80,3 +82,28 @@ app = FastAPI(
 # Routers own their own paths; registering them here is the only place that
 # knows the complete list of endpoints. As each phase lands, one line changes.
 app.include_router(health.router)
+app.include_router(study.router)
+
+# --- CORS ------------------------------------------------------------------
+# Streamlit (port 8501) and this API (port 8000) are different origins, so a
+# browser refuses to let the frontend read our responses until the server says
+# the origin is allowed. Without this, every frontend request fails with an
+# opaque "CORS policy" TypeError in the browser console while the backend logs
+# show nothing at all — a confusing failure worth understanding early.
+#
+# `allow_origins` is an explicit list from settings (see config.py for why not
+# "*"). Credentials stay off: this API is unauthenticated and the browser
+# should not attach cookies to it.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
+# Exception handlers belong to the app rather than to a router: FastAPI only
+# consults handlers registered on the application (or via an APIRouter's own
+# handler list). This one renders our error body in the documented
+# ErrorResponse shape instead of FastAPI's bare {"detail": ...}.
+app.add_exception_handler(StudyAPIError, study_api_error_handler)

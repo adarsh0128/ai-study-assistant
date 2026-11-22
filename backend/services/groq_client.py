@@ -179,8 +179,16 @@ def _translate_error(exc: Exception) -> Exception:
         )
 
     # --- 400: other bad requests -------------------------------------------
+    # The provider's message is genuinely useful for debugging (it names the
+    # offending field), but it can echo the request back — including anything
+    # the caller put in it. So it goes to provider_detail, which is logged and
+    # never reaches the client; the client gets a message we wrote.
     if isinstance(exc, BadRequestError) or status == 400:
-        return LLMProviderError(f"Groq rejected the request (HTTP 400): {message}")
+        return LLMProviderError(
+            "Groq rejected the request (HTTP 400). Check the model name and "
+            "parameters.",
+            provider_detail=message,
+        )
 
     # --- 5xx ----------------------------------------------------------------
     if isinstance(exc, InternalServerError) or (status and status >= 500):

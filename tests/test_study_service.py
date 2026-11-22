@@ -247,14 +247,39 @@ class TestFeaturesHappyPath:
         assert isinstance(out.data, study_service.QuizOutput)
         assert out.data.questions[0].answer_index == 2
 
-    def test_quiz_extra_questions_than_requested_is_not_an_error(self, script) -> None:
-        """A count mismatch is information, not a failure."""
+    def test_quiz_extra_questions_than_requested_are_trimmed(self, script) -> None:
+        """More questions than asked for are trimmed to honour the request.
+
+        The prompt asks for an exact count, but a model occasionally
+        overshoots. Returning the overshoot would break the endpoint's own
+        contract, so the service trims and logs.
+        """
         script(_result(json.dumps({"questions": [
             {"question": "Q1", "options": ["A", "B", "C", "D"], "answer_index": 0},
             {"question": "Q2", "options": ["A", "B", "C", "D"], "answer_index": 1},
+            {"question": "Q3", "options": ["A", "B", "C", "D"], "answer_index": 2},
         ]})))
-        out = study_service.generate_quiz(NOTES, num_questions=1)
+        out = study_service.generate_quiz(NOTES, num_questions=2)
         assert len(out.data.questions) == 2
+        # The first N are kept, in order.
+        assert out.data.questions[0].question == "Q1"
+        assert out.data.questions[1].question == "Q2"
+
+    def test_quiz_fewer_questions_than_requested_are_kept(self, script) -> None:
+        """Under-delivery is not padded — padding would invent content."""
+        script(_result(json.dumps({"questions": [
+            {"question": "Q1", "options": ["A", "B", "C", "D"], "answer_index": 0},
+        ]})))
+        out = study_service.generate_quiz(NOTES, num_questions=5)
+        assert len(out.data.questions) == 1
+
+    def test_interview_questions_trimmed_when_over_requested(self, script) -> None:
+        """Interview questions honour the requested count too."""
+        script(_result(json.dumps({"questions": [
+            {"question": "Q%d" % i} for i in range(1, 8)
+        ]})))
+        out = study_service.generate_interview_questions(NOTES, num_questions=3)
+        assert len(out.data.questions) == 3
 
     def test_explain(self, script) -> None:
         script(_result(json.dumps({

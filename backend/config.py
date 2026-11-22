@@ -79,6 +79,31 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     app_env: str = Field(default="development")
 
+    # Origins allowed to call this API from a browser, comma-separated.
+    #
+    # WHY THIS IS NOT "*":  Streamlit and FastAPI run on different ports, so
+    # the browser treats them as different origins and blocks the request
+    # unless we allow it. An explicit list keeps a random web page from
+    # scripting your local API. Widening it to "*" would also forbid
+    # credentials and is the kind of default that quietly ends up in prod.
+    cors_allow_origins: str = Field(
+        default="http://localhost:8501,http://127.0.0.1:8501",
+        description="Comma-separated browser origins allowed to call this API.",
+    )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """The CORS allow-list as a list, with blanks and stray spaces removed.
+
+        Parsed here rather than at the call site so the middleware gets a
+        clean list and `.env` can use the natural comma-separated form.
+        """
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.cors_allow_origins.split(",")
+            if origin.strip()
+        ]
+
     @field_validator("log_level")
     @classmethod
     def _normalise_log_level(cls, value: str) -> str:

@@ -401,6 +401,37 @@ def _as_response_error(
     )
 
 
+def _trim_questions(
+    data: TModel, num_questions: int, feature: str
+) -> TModel:
+    """Trim an over-long question list down to the requested count.
+
+    The prompt asks for exactly `num_questions`, but a model occasionally
+    overshoots. Returning more than the caller asked for breaks the
+    endpoint's own contract, so we trim and log. Under-delivering is left
+    alone: a short list is still useful, and silently padding it would mean
+    inventing questions the model never wrote.
+    """
+    questions = data.questions
+    if len(questions) > num_questions:
+        logger.info(
+            "%s requested %d questions, model returned %d; trimming to %d",
+            feature,
+            num_questions,
+            len(questions),
+            num_questions,
+        )
+        return data.model_copy(update={"questions": questions[:num_questions]})
+    if len(questions) < num_questions:
+        logger.info(
+            "%s requested %d questions, model returned %d",
+            feature,
+            num_questions,
+            len(questions),
+        )
+    return data
+
+
 def _log_success(spec: PromptSpec, usage: Usage, model: str) -> None:
     """One structured log line per completed call."""
     logger.info(
@@ -461,16 +492,7 @@ def generate_quiz(
     )
     data, model, usage = _call_and_parse(spec, QuizOutput)
     _log_success(spec, usage, model)
-
-    # The model may return a different count than requested. That is not an
-    # error — it is information the caller should see, so it gets logged
-    # rather than silently accepted.
-    if len(data.questions) != num_questions:
-        logger.info(
-            "quiz requested %d questions, model returned %d",
-            num_questions,
-            len(data.questions),
-        )
+    data = _trim_questions(data, num_questions, "quiz")
     return StudyResult(data=data, model=model, usage=usage)
 
 
@@ -509,6 +531,7 @@ def generate_interview_questions(
     )
     data, model, usage = _call_and_parse(spec, InterviewOutput)
     _log_success(spec, usage, model)
+    data = _trim_questions(data, num_questions, "interview")
     return StudyResult(data=data, model=model, usage=usage)
 
 

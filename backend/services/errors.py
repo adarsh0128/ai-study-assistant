@@ -39,7 +39,17 @@ class LLMRateLimitError(LLMError):
 
 
 class LLMProviderError(LLMError):
-    """The provider returned an error we cannot classify more precisely."""
+    """The provider returned an error we cannot classify more precisely.
+
+    `str()` of this exception is sent to the HTTP client, so subclasses carry
+    only a message written for a human outside this process. When the provider
+    said something useful but unsuitable for the wire, it is attached as
+    `provider_detail` — logged server-side, never serialised into a response.
+    """
+
+    def __init__(self, message: str, *, provider_detail: str | None = None) -> None:
+        super().__init__(message)
+        self.provider_detail = provider_detail
 
 
 class LLMResponseError(LLMError):

@@ -81,6 +81,11 @@ class ChatResult(TypedDict):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    # "stop" (finished naturally), "length" (hit max_tokens), or another
+    # provider value. Exposed so callers can tell a truncated answer from a
+    # complete one — a truncated JSON response is unrecoverable as-is, but
+    # retrying with a bigger budget usually works.
+    finish_reason: str
 
 
 def get_client() -> Groq:
@@ -297,15 +302,18 @@ def chat_completion(
         "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
         "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
         "total_tokens": getattr(usage, "total_tokens", 0) or 0,
+        "finish_reason": getattr(choice, "finish_reason", None) or "stop",
     }
 
     # Token counts are the currency of LLM apps — log them so you can see
     # cost and context-headroom as you develop.
     logger.info(
-        "Groq call ok: model=%s prompt_tokens=%d completion_tokens=%d total=%d",
+        "Groq call ok: model=%s prompt_tokens=%d completion_tokens=%d "
+        "total=%d finish=%s",
         result["model"],
         result["prompt_tokens"],
         result["completion_tokens"],
         result["total_tokens"],
+        result["finish_reason"],
     )
     return result
